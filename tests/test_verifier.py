@@ -1,8 +1,10 @@
+import json
 import unittest
 
 from src.verifier import (
     create_evidence_record,
     create_verification_report,
+    export_report_json,
     verify_claim,
     verify_claim_against_sources,
 )
@@ -209,8 +211,6 @@ class TestVerifyClaim(unittest.TestCase):
 
         self.assertEqual(result["status"], "UNVERIFIABLE")
 
-    # Structured verification report tests
-
     def test_verification_report_contains_source_details(self):
         sources = [
             create_evidence_record(
@@ -229,10 +229,7 @@ class TestVerifyClaim(unittest.TestCase):
 
         self.assertEqual(report["overall_status"], "SUPPORTED")
         self.assertEqual(report["source_count"], 1)
-        self.assertEqual(
-            report["sources"][0]["source_name"],
-            "Source One",
-        )
+        self.assertEqual(report["sources"][0]["source_name"], "Source One")
         self.assertEqual(
             report["sources"][0]["evidence_text"],
             "Python is popular.",
@@ -264,14 +261,75 @@ class TestVerifyClaim(unittest.TestCase):
             "Sources disagree. Manual review is required.",
             report["warnings"],
         )
-        self.assertEqual(
-            report["overall_status"],
-            "UNVERIFIABLE",
-        )
+        self.assertEqual(report["overall_status"], "UNVERIFIABLE")
 
     def test_verification_report_rejects_invalid_input(self):
         with self.assertRaises(ValueError):
             create_verification_report({})
+
+    # JSON export tests
+
+    def test_json_export_produces_valid_json(self):
+        verification = verify_claim_against_sources(
+            "Python is popular.",
+            [
+                create_evidence_record(
+                    "source_001",
+                    "Source One",
+                    "Python is popular.",
+                ),
+            ],
+        )
+
+        report = create_verification_report(verification)
+        exported = export_report_json(report)
+        parsed = json.loads(exported)
+
+        self.assertEqual(parsed["overall_status"], "SUPPORTED")
+        self.assertEqual(parsed["claim"], "Python is popular.")
+
+    def test_json_export_preserves_source_evidence(self):
+        verification = verify_claim_against_sources(
+            "Python is popular.",
+            [
+                create_evidence_record(
+                    "source_001",
+                    "Source One",
+                    "Python is popular.",
+                ),
+            ],
+        )
+
+        report = create_verification_report(verification)
+        parsed = json.loads(export_report_json(report))
+
+        self.assertEqual(parsed["source_count"], 1)
+        self.assertEqual(
+            parsed["sources"][0]["source_id"],
+            "source_001",
+        )
+        self.assertEqual(
+            parsed["sources"][0]["evidence_text"],
+            "Python is popular.",
+        )
+
+    def test_json_export_rejects_missing_fields(self):
+        with self.assertRaises(ValueError):
+            export_report_json({})
+
+    def test_json_export_rejects_negative_indentation(self):
+        report = {
+            "claim": "Python is popular.",
+            "overall_status": "SUPPORTED",
+            "summary": "A source supports the claim.",
+            "source_count": 0,
+            "sources": [],
+            "has_conflicting_sources": False,
+            "warnings": [],
+        }
+
+        with self.assertRaises(ValueError):
+            export_report_json(report, indent=-1)
 
 
 if __name__ == "__main__":

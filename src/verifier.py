@@ -1,5 +1,6 @@
+import json
 import re
-from typing import Literal, Any
+from typing import Any, Literal
 
 
 VerificationStatus = Literal[
@@ -7,6 +8,12 @@ VerificationStatus = Literal[
     "CONTRADICTED",
     "UNVERIFIABLE",
 ]
+
+VALID_STATUSES = {
+    "SUPPORTED",
+    "CONTRADICTED",
+    "UNVERIFIABLE",
+}
 
 
 def create_evidence_record(
@@ -249,7 +256,7 @@ def verify_claim_against_sources(
 def create_verification_report(
     verification_result: dict[str, Any],
 ) -> dict[str, Any]:
-    """Create a structured report from a multi-source verification result."""
+    """Create a structured report from a multi-source result."""
 
     required_fields = {
         "claim",
@@ -274,13 +281,7 @@ def create_verification_report(
     if not isinstance(claim, str) or not claim.strip():
         raise ValueError("Report claim cannot be empty.")
 
-    valid_statuses = {
-        "SUPPORTED",
-        "CONTRADICTED",
-        "UNVERIFIABLE",
-    }
-
-    if status not in valid_statuses:
+    if status not in VALID_STATUSES:
         raise ValueError("Verification status is invalid.")
 
     if not isinstance(reason, str) or not reason.strip():
@@ -295,18 +296,18 @@ def create_verification_report(
         if not isinstance(result, dict):
             raise ValueError("Each source result must be a dictionary.")
 
-        if not {
-            "status",
-            "reason",
-        }.issubset(result.keys()):
+        if not {"status", "reason"}.issubset(result.keys()):
             raise ValueError(
                 "Each source result must contain a status and reason."
             )
 
         source_status = result["status"]
 
-        if source_status not in valid_statuses:
+        if source_status not in VALID_STATUSES:
             raise ValueError("A source result has an invalid status.")
+
+        if not isinstance(result["reason"], str) or not result["reason"].strip():
+            raise ValueError("A source result reason cannot be empty.")
 
         report_sources.append(
             {
@@ -352,6 +353,70 @@ def create_verification_report(
     }
 
 
+def export_report_json(
+    report: dict[str, Any],
+    indent: int = 2,
+) -> str:
+    """Validate and export a verification report as a JSON string."""
+
+    if not isinstance(report, dict):
+        raise ValueError("Report must be a dictionary.")
+
+    required_fields = {
+        "claim",
+        "overall_status",
+        "summary",
+        "source_count",
+        "sources",
+        "has_conflicting_sources",
+        "warnings",
+    }
+
+    if not required_fields.issubset(report.keys()):
+        raise ValueError("Report is missing required fields.")
+
+    if not isinstance(report["claim"], str) or not report["claim"].strip():
+        raise ValueError("Report claim cannot be empty.")
+
+    if report["overall_status"] not in VALID_STATUSES:
+        raise ValueError("Report status is invalid.")
+
+    if not isinstance(report["summary"], str) or not report["summary"].strip():
+        raise ValueError("Report summary cannot be empty.")
+
+    if (
+        not isinstance(report["source_count"], int)
+        or isinstance(report["source_count"], bool)
+        or report["source_count"] != len(report["sources"])
+    ):
+        raise ValueError("Source count must match the number of sources.")
+
+    if not isinstance(report["sources"], list):
+        raise ValueError("Report sources must be a list.")
+
+    if not isinstance(report["has_conflicting_sources"], bool):
+        raise ValueError("Conflict flag must be a boolean.")
+
+    if (
+        not isinstance(report["warnings"], list)
+        or not all(isinstance(item, str) for item in report["warnings"])
+    ):
+        raise ValueError("Warnings must be a list of strings.")
+
+    if not isinstance(indent, int) or isinstance(indent, bool) or indent < 0:
+        raise ValueError("Indent must be a non-negative integer.")
+
+    try:
+        return json.dumps(
+            report,
+            indent=indent,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError("Report contains data that cannot be exported to JSON.") from error
+
+
 if __name__ == "__main__":
     example_sources = [
         create_evidence_record(
@@ -372,5 +437,4 @@ if __name__ == "__main__":
     )
 
     report = create_verification_report(verification)
-
-    print(report)
+    print(export_report_json(report))
