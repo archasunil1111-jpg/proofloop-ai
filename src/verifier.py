@@ -1,6 +1,5 @@
-
 import re
-from typing import Literal
+from typing import Literal, Any
 
 
 VerificationStatus = Literal[
@@ -36,6 +35,7 @@ def create_evidence_record(
 
 def _normalize(text: str) -> str:
     """Normalize text for case-insensitive matching."""
+
     text = text.lower()
     text = re.sub(r"[^\w\s']", " ", text)
     return " ".join(text.split())
@@ -43,7 +43,9 @@ def _normalize(text: str) -> str:
 
 def _split_sentences(text: str) -> list[str]:
     """Split evidence into sentences and normalize each sentence."""
+
     parts = re.split(r"(?<=[.!?])\s+|\n+", text.strip())
+
     return [
         _normalize(part)
         for part in parts
@@ -53,6 +55,7 @@ def _split_sentences(text: str) -> list[str]:
 
 def _opposite_copula_claim(claim: str) -> str | None:
     """Create a limited opposite-polarity form for simple claims."""
+
     words = claim.split()
 
     for index, word in enumerate(words):
@@ -143,8 +146,8 @@ def verify_claim(
             "claim": claim,
             "status": "SUPPORTED",
             "reason": (
-                "A complete evidence sentence matches the claim after "
-                "normalizing capitalization and punctuation."
+                "A complete sentence match occurs after normalizing "
+                "capitalization and punctuation."
             ),
             "source_id": source_id,
         }
@@ -163,7 +166,7 @@ def verify_claim(
 def verify_claim_against_sources(
     claim: str,
     sources: list[dict[str, str]],
-) -> dict:
+) -> dict[str, Any]:
     """Verify a claim against multiple evidence records."""
 
     if not isinstance(claim, str) or not claim.strip():
@@ -198,6 +201,7 @@ def verify_claim_against_sources(
         )
 
         result["source_name"] = evidence_record["source_name"]
+        result["evidence_text"] = evidence_record["text"]
         source_results.append(result)
 
     statuses = [result["status"] for result in source_results]
@@ -214,21 +218,137 @@ def verify_claim_against_sources(
 
     elif "CONTRADICTED" in statuses and "SUPPORTED" not in statuses:
         overall_status = "CONTRADICTED"
-        reason = "At least one source contradicts the claim, and none supports it."
+        reason = (
+            "At least one source contradicts the claim, "
+            "and none supports it."
+        )
 
     elif "SUPPORTED" in statuses and "CONTRADICTED" not in statuses:
         overall_status = "SUPPORTED"
-        reason = "At least one source supports the claim, with no recognized contradiction."
+        reason = (
+            "At least one source supports the claim, "
+            "with no recognized contradiction."
+        )
 
     else:
         overall_status = "UNVERIFIABLE"
-        reason = "The available source results do not establish a reliable verdict."
+        reason = (
+            "The available source results do not establish "
+            "a reliable verdict."
+        )
 
     return {
         "claim": claim,
         "status": overall_status,
         "reason": reason,
+        "source_count": len(source_results),
         "source_results": source_results,
+    }
+
+
+def create_verification_report(
+    verification_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Create a structured report from a multi-source verification result."""
+
+    required_fields = {
+        "claim",
+        "status",
+        "reason",
+        "source_results",
+    }
+
+    if not isinstance(verification_result, dict):
+        raise ValueError("Verification result must be a dictionary.")
+
+    if not required_fields.issubset(verification_result.keys()):
+        raise ValueError(
+            "Verification result is missing required fields."
+        )
+
+    claim = verification_result["claim"]
+    status = verification_result["status"]
+    reason = verification_result["reason"]
+    source_results = verification_result["source_results"]
+
+    if not isinstance(claim, str) or not claim.strip():
+        raise ValueError("Report claim cannot be empty.")
+
+    valid_statuses = {
+        "SUPPORTED",
+        "CONTRADICTED",
+        "UNVERIFIABLE",
+    }
+
+    if status not in valid_statuses:
+        raise ValueError("Verification status is invalid.")
+
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("Report reason cannot be empty.")
+
+    if not isinstance(source_results, list):
+        raise ValueError("Source results must be a list.")
+
+    report_sources = []
+
+    for result in source_results:
+        if not isinstance(result, dict):
+            raise ValueError("Each source result must be a dictionary.")
+
+        if not {
+            "status",
+            "reason",
+        }.issubset(result.keys()):
+            raise ValueError(
+                "Each source result must contain a status and reason."
+            )
+
+        source_status = result["status"]
+
+        if source_status not in valid_statuses:
+            raise ValueError("A source result has an invalid status.")
+
+        report_sources.append(
+            {
+                "source_id": result.get("source_id"),
+                "source_name": result.get("source_name", "Unknown source"),
+                "status": source_status,
+                "reason": result["reason"],
+                "evidence_text": result.get("evidence_text", ""),
+            }
+        )
+
+    has_conflict = (
+        any(source["status"] == "SUPPORTED" for source in report_sources)
+        and any(
+            source["status"] == "CONTRADICTED"
+            for source in report_sources
+        )
+    )
+
+    warnings = []
+
+    if has_conflict:
+        warnings.append(
+            "Sources disagree. Manual review is required."
+        )
+
+    if not report_sources:
+        warnings.append("No evidence sources were supplied.")
+
+    if status == "UNVERIFIABLE":
+        warnings.append(
+            "This result does not establish whether the claim is true."
+        )
+
+    return {
+        "claim": claim,
+        "overall_status": status,
+        "summary": reason,
+        "source_count": len(report_sources),
+        "sources": report_sources,
+        "has_conflicting_sources": has_conflict,
+        "warnings": warnings,
     }
 
 
@@ -246,9 +366,11 @@ if __name__ == "__main__":
         ),
     ]
 
-    print(
-        verify_claim_against_sources(
-            "Python is popular.",
-            example_sources,
-        )
+    verification = verify_claim_against_sources(
+        "Python is popular.",
+        example_sources,
     )
+
+    report = create_verification_report(verification)
+
+    print(report)
