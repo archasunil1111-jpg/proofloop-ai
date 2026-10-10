@@ -43,7 +43,11 @@ def _opposite_copula_claim(claim: str) -> str | None:
 
 
 def verify_claim(claim: str, evidence: str) -> dict[str, str]:
-    """Verify a claim using conservative, exact sentence matching."""
+    """
+    Verify a claim using conservative sentence-level text rules.
+
+    This is a basic rule-based verifier, not a semantic fact-checker.
+    """
 
     if not claim.strip():
         raise ValueError("Claim cannot be empty.")
@@ -61,29 +65,46 @@ def verify_claim(claim: str, evidence: str) -> dict[str, str]:
     opposite_claim = _opposite_copula_claim(normalized_claim)
 
     has_support = normalized_claim in evidence_sentences
-    has_contradiction = (
+
+    has_opposing_phrase = (
         opposite_claim is not None
-        and opposite_claim in evidence_sentences
+        and any(
+            re.search(
+                r"(?<!\w)" + re.escape(opposite_claim) + r"(?!\w)",
+                sentence,
+            )
+            for sentence in evidence_sentences
+        )
     )
 
-    # Conflicting exact matches must not produce a confident verdict.
-    if has_support and has_contradiction:
+    # Conflicting evidence must not receive a confident verdict.
+    if has_support and has_opposing_phrase:
         return {
             "claim": claim,
             "status": "UNVERIFIABLE",
             "reason": (
-                "The evidence contains both supporting and opposing "
-                "statements. Manual review is required."
+                "The evidence contains supporting and potentially opposing "
+                "wording. Manual review is required."
             ),
         }
 
-    if has_contradiction:
+    if has_opposing_phrase:
+        if opposite_claim in evidence_sentences:
+            return {
+                "claim": claim,
+                "status": "CONTRADICTED",
+                "reason": (
+                    "A complete evidence sentence matches a simple "
+                    "opposite-polarity form."
+                ),
+            }
+
         return {
             "claim": claim,
-            "status": "CONTRADICTED",
+            "status": "UNVERIFIABLE",
             "reason": (
-                "A complete evidence sentence matches a simple "
-                "opposite-polarity form. Review the source before relying on it."
+                "Potentially opposing wording appears in the evidence, "
+                "but it is not sufficient for a confident verdict."
             ),
         }
 
@@ -113,7 +134,7 @@ if __name__ == "__main__":
         ("Python is popular.", "Python is not popular."),
         (
             "Python is popular.",
-            "Python is popular in some regions, but usage varies.",
+            "Python is popular. Python is not popular in this example.",
         ),
     ]
 
