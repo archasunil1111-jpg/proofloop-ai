@@ -1,7 +1,7 @@
 
 import unittest
 
-from src.verifier import verify_claim
+from src.verifier import create_evidence_record, verify_claim
 
 
 class TestVerifyClaim(unittest.TestCase):
@@ -11,7 +11,10 @@ class TestVerifyClaim(unittest.TestCase):
             verify_claim("", "Python is popular.")
 
     def test_empty_evidence_is_unverifiable(self):
-        result = verify_claim("Python is popular.", "")
+        result = verify_claim(
+            "Python is popular.",
+            "",
+        )
         self.assertEqual(result["status"], "UNVERIFIABLE")
 
     def test_direct_match_is_supported(self):
@@ -73,7 +76,6 @@ class TestVerifyClaim(unittest.TestCase):
         )
         self.assertEqual(result["status"], "UNVERIFIABLE")
 
-    
     def test_source_id_is_preserved_for_supported_claim(self):
         result = verify_claim(
             "Python is popular.",
@@ -93,6 +95,53 @@ class TestVerifyClaim(unittest.TestCase):
 
         self.assertEqual(result["status"], "UNVERIFIABLE")
         self.assertEqual(result["source_id"], "report_002")
+
+    def test_evidence_record_preserves_source_details(self):
+        evidence = create_evidence_record(
+            source_id="article_001",
+            source_name="Python Report",
+            text="Python is popular.",
+        )
+
+        self.assertEqual(evidence["source_id"], "article_001")
+        self.assertEqual(evidence["source_name"], "Python Report")
+        self.assertEqual(evidence["text"], "Python is popular.")
+
+    def test_evidence_record_strips_extra_whitespace(self):
+        evidence = create_evidence_record(
+            source_id="  article_001  ",
+            source_name="  Python Report  ",
+            text="  Python is popular.  ",
+        )
+
+        self.assertEqual(evidence["source_id"], "article_001")
+        self.assertEqual(evidence["source_name"], "Python Report")
+        self.assertEqual(evidence["text"], "Python is popular.")
+
+    def test_evidence_record_rejects_blank_source_id(self):
+        with self.assertRaises(ValueError):
+            create_evidence_record(
+                source_id=" ",
+                source_name="Python Report",
+                text="Python is popular.",
+            )
+
+    def test_evidence_record_rejects_blank_source_name(self):
+        with self.assertRaises(ValueError):
+            create_evidence_record(
+                source_id="article_001",
+                source_name=" ",
+                text="Python is popular.",
+            )
+
+    def test_evidence_record_rejects_blank_text(self):
+        with self.assertRaises(ValueError):
+            create_evidence_record(
+                source_id="article_001",
+                source_name="Python Report",
+                text=" ",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

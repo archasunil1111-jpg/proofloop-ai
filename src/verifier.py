@@ -10,6 +10,30 @@ VerificationStatus = Literal[
 ]
 
 
+def create_evidence_record(
+    source_id: str,
+    source_name: str,
+    text: str,
+) -> dict[str, str]:
+    """Create a validated evidence record."""
+
+    fields = {
+        "source_id": source_id,
+        "source_name": source_name,
+        "text": text,
+    }
+
+    for field_name, value in fields.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field_name} cannot be empty.")
+
+    return {
+        "source_id": source_id.strip(),
+        "source_name": source_name.strip(),
+        "text": text.strip(),
+    }
+
+
 def _normalize(text: str) -> str:
     """Normalize text for case-insensitive matching."""
     text = text.lower()
@@ -20,7 +44,11 @@ def _normalize(text: str) -> str:
 def _split_sentences(text: str) -> list[str]:
     """Split evidence into sentences and normalize each sentence."""
     parts = re.split(r"(?<=[.!?])\s+|\n+", text.strip())
-    return [_normalize(part) for part in parts if part.strip()]
+    return [
+        _normalize(part)
+        for part in parts
+        if part.strip()
+    ]
 
 
 def _opposite_copula_claim(claim: str) -> str | None:
@@ -50,8 +78,8 @@ def verify_claim(
     """
     Verify a claim using conservative sentence-level text rules.
 
-    source_id identifies the source associated with the supplied evidence.
-    This function does not independently verify the source's authenticity.
+    The source ID identifies the associated evidence source.
+    It does not independently establish source authenticity.
     """
 
     if not claim.strip():
@@ -88,8 +116,8 @@ def verify_claim(
             "claim": claim,
             "status": "UNVERIFIABLE",
             "reason": (
-                "The evidence contains supporting and potentially opposing "
-                "wording. Manual review is required."
+                "The evidence contains supporting and potentially "
+                "opposing wording. Manual review is required."
             ),
             "source_id": source_id,
         }
@@ -131,8 +159,9 @@ def verify_claim(
         "claim": claim,
         "status": "UNVERIFIABLE",
         "reason": (
-            "No complete sentence match or recognized simple contradiction "
-            "was found. This does not establish whether the claim is true."
+            "No complete sentence match or recognized simple "
+            "contradiction was found. This does not establish "
+            "whether the claim is true."
         ),
         "source_id": source_id,
     }
