@@ -42,11 +42,16 @@ def _opposite_copula_claim(claim: str) -> str | None:
     return None
 
 
-def verify_claim(claim: str, evidence: str) -> dict[str, str]:
+def verify_claim(
+    claim: str,
+    evidence: str,
+    source_id: str | None = None,
+) -> dict[str, str | None]:
     """
     Verify a claim using conservative sentence-level text rules.
 
-    This is a basic rule-based verifier, not a semantic fact-checker.
+    source_id identifies the source associated with the supplied evidence.
+    This function does not independently verify the source's authenticity.
     """
 
     if not claim.strip():
@@ -57,6 +62,7 @@ def verify_claim(claim: str, evidence: str) -> dict[str, str]:
             "claim": claim,
             "status": "UNVERIFIABLE",
             "reason": "No evidence was provided.",
+            "source_id": source_id,
         }
 
     normalized_claim = _normalize(claim)
@@ -77,7 +83,6 @@ def verify_claim(claim: str, evidence: str) -> dict[str, str]:
         )
     )
 
-    # Conflicting evidence must not receive a confident verdict.
     if has_support and has_opposing_phrase:
         return {
             "claim": claim,
@@ -86,6 +91,7 @@ def verify_claim(claim: str, evidence: str) -> dict[str, str]:
                 "The evidence contains supporting and potentially opposing "
                 "wording. Manual review is required."
             ),
+            "source_id": source_id,
         }
 
     if has_opposing_phrase:
@@ -97,6 +103,7 @@ def verify_claim(claim: str, evidence: str) -> dict[str, str]:
                     "A complete evidence sentence matches a simple "
                     "opposite-polarity form."
                 ),
+                "source_id": source_id,
             }
 
         return {
@@ -106,6 +113,7 @@ def verify_claim(claim: str, evidence: str) -> dict[str, str]:
                 "Potentially opposing wording appears in the evidence, "
                 "but it is not sufficient for a confident verdict."
             ),
+            "source_id": source_id,
         }
 
     if has_support:
@@ -116,6 +124,7 @@ def verify_claim(claim: str, evidence: str) -> dict[str, str]:
                 "A complete evidence sentence matches the claim "
                 "after normalizing capitalization and punctuation."
             ),
+            "source_id": source_id,
         }
 
     return {
@@ -125,18 +134,28 @@ def verify_claim(claim: str, evidence: str) -> dict[str, str]:
             "No complete sentence match or recognized simple contradiction "
             "was found. This does not establish whether the claim is true."
         ),
+        "source_id": source_id,
     }
 
 
 if __name__ == "__main__":
     examples = [
-        ("Python is popular.", "Python is popular."),
-        ("Python is popular.", "Python is not popular."),
         (
             "Python is popular.",
-            "Python is popular. Python is not popular in this example.",
+            "Python is popular.",
+            "article_001",
+        ),
+        (
+            "Python is popular.",
+            "Python is not popular.",
+            "report_002",
+        ),
+        (
+            "Python is popular.",
+            "The sky is blue.",
+            "report_003",
         ),
     ]
 
-    for claim, evidence in examples:
-        print(verify_claim(claim, evidence))
+    for claim, evidence, source_id in examples:
+        print(verify_claim(claim, evidence, source_id))

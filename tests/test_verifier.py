@@ -73,6 +73,26 @@ class TestVerifyClaim(unittest.TestCase):
         )
         self.assertEqual(result["status"], "UNVERIFIABLE")
 
+    
+    def test_source_id_is_preserved_for_supported_claim(self):
+        result = verify_claim(
+            "Python is popular.",
+            "Python is popular.",
+            source_id="article_001",
+        )
+
+        self.assertEqual(result["status"], "SUPPORTED")
+        self.assertEqual(result["source_id"], "article_001")
+
+    def test_source_id_is_preserved_for_unverifiable_claim(self):
+        result = verify_claim(
+            "Python is popular.",
+            "The sky is blue.",
+            source_id="report_002",
+        )
+
+        self.assertEqual(result["status"], "UNVERIFIABLE")
+        self.assertEqual(result["source_id"], "report_002")
 
 if __name__ == "__main__":
     unittest.main()
