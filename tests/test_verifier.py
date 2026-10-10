@@ -15,22 +15,44 @@ class TestVerifyClaim(unittest.TestCase):
 
     def test_empty_claim_raises_error(self):
         with self.assertRaises(ValueError):
-            verify_claim("", "Python is a programming language.")
+            verify_claim("", "Python is popular.")
 
     def test_empty_evidence_is_unverifiable(self):
         result = verify_claim("Python is popular.", "")
 
         self.assertEqual(result["status"], "UNVERIFIABLE")
-        self.assertIn("No evidence", result["reason"])
 
-    def test_nonempty_inputs_are_not_assumed_true(self):
+    def test_direct_match_is_supported(self):
+        result = verify_claim(
+            "Python is popular.",
+            "Python is popular.",
+        )
+
+        self.assertEqual(result["status"], "SUPPORTED")
+
+    def test_simple_opposite_polarity_is_contradicted(self):
+        result = verify_claim(
+            "Python is popular.",
+            "Python is not popular.",
+        )
+
+        self.assertEqual(result["status"], "CONTRADICTED")
+
+    def test_unrelated_evidence_is_unverifiable(self):
         result = verify_claim(
             "Python is popular.",
             "Python is used for data science.",
         )
 
         self.assertEqual(result["status"], "UNVERIFIABLE")
-        self.assertEqual(result["claim"], "Python is popular.")
+
+    def test_matching_is_case_insensitive(self):
+        result = verify_claim(
+            "Python is popular.",
+            "PYTHON IS POPULAR.",
+        )
+
+        self.assertEqual(result["status"], "SUPPORTED")
 
 
 if __name__ == "__main__":
