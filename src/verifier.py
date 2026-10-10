@@ -75,17 +75,12 @@ def verify_claim(
     evidence: str,
     source_id: str | None = None,
 ) -> dict[str, str | None]:
-    """
-    Verify a claim using conservative sentence-level text rules.
+    """Verify a claim using conservative sentence-level text rules."""
 
-    The source ID identifies the associated evidence source.
-    It does not independently establish source authenticity.
-    """
-
-    if not claim.strip():
+    if not isinstance(claim, str) or not claim.strip():
         raise ValueError("Claim cannot be empty.")
 
-    if not evidence.strip():
+    if not isinstance(evidence, str) or not evidence.strip():
         return {
             "claim": claim,
             "status": "UNVERIFIABLE",
@@ -95,7 +90,6 @@ def verify_claim(
 
     normalized_claim = _normalize(claim)
     evidence_sentences = _split_sentences(evidence)
-
     opposite_claim = _opposite_copula_claim(normalized_claim)
 
     has_support = normalized_claim in evidence_sentences
@@ -116,8 +110,8 @@ def verify_claim(
             "claim": claim,
             "status": "UNVERIFIABLE",
             "reason": (
-                "The evidence contains supporting and potentially "
-                "opposing wording. Manual review is required."
+                "The evidence contains supporting and potentially opposing "
+                "wording. Manual review is required."
             ),
             "source_id": source_id,
         }
@@ -149,8 +143,8 @@ def verify_claim(
             "claim": claim,
             "status": "SUPPORTED",
             "reason": (
-                "A complete evidence sentence matches the claim "
-                "after normalizing capitalization and punctuation."
+                "A complete evidence sentence matches the claim after "
+                "normalizing capitalization and punctuation."
             ),
             "source_id": source_id,
         }
@@ -159,32 +153,102 @@ def verify_claim(
         "claim": claim,
         "status": "UNVERIFIABLE",
         "reason": (
-            "No complete sentence match or recognized simple "
-            "contradiction was found. This does not establish "
-            "whether the claim is true."
+            "No complete sentence match or recognized simple contradiction "
+            "was found. This does not establish whether the claim is true."
         ),
         "source_id": source_id,
     }
 
 
+def verify_claim_against_sources(
+    claim: str,
+    sources: list[dict[str, str]],
+) -> dict:
+    """Verify a claim against multiple evidence records."""
+
+    if not isinstance(claim, str) or not claim.strip():
+        raise ValueError("Claim cannot be empty.")
+
+    if not isinstance(sources, list):
+        raise ValueError("Sources must be provided as a list.")
+
+    source_results = []
+
+    for source in sources:
+        if not isinstance(source, dict):
+            raise ValueError("Each source must be a dictionary.")
+
+        required_fields = {"source_id", "source_name", "text"}
+
+        if not required_fields.issubset(source.keys()):
+            raise ValueError(
+                "Each source must contain source_id, source_name, and text."
+            )
+
+        evidence_record = create_evidence_record(
+            source["source_id"],
+            source["source_name"],
+            source["text"],
+        )
+
+        result = verify_claim(
+            claim,
+            evidence_record["text"],
+            source_id=evidence_record["source_id"],
+        )
+
+        result["source_name"] = evidence_record["source_name"]
+        source_results.append(result)
+
+    statuses = [result["status"] for result in source_results]
+
+    if not statuses or all(
+        status == "UNVERIFIABLE" for status in statuses
+    ):
+        overall_status = "UNVERIFIABLE"
+        reason = "No source provided sufficient evidence for a verdict."
+
+    elif "SUPPORTED" in statuses and "CONTRADICTED" in statuses:
+        overall_status = "UNVERIFIABLE"
+        reason = "Sources disagree. Manual review is required."
+
+    elif "CONTRADICTED" in statuses and "SUPPORTED" not in statuses:
+        overall_status = "CONTRADICTED"
+        reason = "At least one source contradicts the claim, and none supports it."
+
+    elif "SUPPORTED" in statuses and "CONTRADICTED" not in statuses:
+        overall_status = "SUPPORTED"
+        reason = "At least one source supports the claim, with no recognized contradiction."
+
+    else:
+        overall_status = "UNVERIFIABLE"
+        reason = "The available source results do not establish a reliable verdict."
+
+    return {
+        "claim": claim,
+        "status": overall_status,
+        "reason": reason,
+        "source_results": source_results,
+    }
+
+
 if __name__ == "__main__":
-    examples = [
-        (
+    example_sources = [
+        create_evidence_record(
+            "source_001",
+            "Source One",
             "Python is popular.",
-            "Python is popular.",
-            "article_001",
         ),
-        (
-            "Python is popular.",
+        create_evidence_record(
+            "source_002",
+            "Source Two",
             "Python is not popular.",
-            "report_002",
-        ),
-        (
-            "Python is popular.",
-            "The sky is blue.",
-            "report_003",
         ),
     ]
 
-    for claim, evidence, source_id in examples:
-        print(verify_claim(claim, evidence, source_id))
+    print(
+        verify_claim_against_sources(
+            "Python is popular.",
+            example_sources,
+        )
+    )

@@ -1,7 +1,11 @@
 
 import unittest
 
-from src.verifier import create_evidence_record, verify_claim
+from src.verifier import (
+    create_evidence_record,
+    verify_claim,
+    verify_claim_against_sources,
+)
 
 
 class TestVerifyClaim(unittest.TestCase):
@@ -11,10 +15,7 @@ class TestVerifyClaim(unittest.TestCase):
             verify_claim("", "Python is popular.")
 
     def test_empty_evidence_is_unverifiable(self):
-        result = verify_claim(
-            "Python is popular.",
-            "",
-        )
+        result = verify_claim("Python is popular.", "")
         self.assertEqual(result["status"], "UNVERIFIABLE")
 
     def test_direct_match_is_supported(self):
@@ -69,10 +70,7 @@ class TestVerifyClaim(unittest.TestCase):
     def test_supporting_sentence_with_qualified_contradiction_is_unverifiable(self):
         result = verify_claim(
             "Python is popular.",
-            (
-                "Python is popular. "
-                "Python is not popular in this example."
-            ),
+            "Python is popular. Python is not popular in this example.",
         )
         self.assertEqual(result["status"], "UNVERIFIABLE")
 
@@ -82,7 +80,6 @@ class TestVerifyClaim(unittest.TestCase):
             "Python is popular.",
             source_id="article_001",
         )
-
         self.assertEqual(result["status"], "SUPPORTED")
         self.assertEqual(result["source_id"], "article_001")
 
@@ -92,28 +89,25 @@ class TestVerifyClaim(unittest.TestCase):
             "The sky is blue.",
             source_id="report_002",
         )
-
         self.assertEqual(result["status"], "UNVERIFIABLE")
         self.assertEqual(result["source_id"], "report_002")
 
     def test_evidence_record_preserves_source_details(self):
         evidence = create_evidence_record(
-            source_id="article_001",
-            source_name="Python Report",
-            text="Python is popular.",
+            "article_001",
+            "Python Report",
+            "Python is popular.",
         )
-
         self.assertEqual(evidence["source_id"], "article_001")
         self.assertEqual(evidence["source_name"], "Python Report")
         self.assertEqual(evidence["text"], "Python is popular.")
 
     def test_evidence_record_strips_extra_whitespace(self):
         evidence = create_evidence_record(
-            source_id="  article_001  ",
-            source_name="  Python Report  ",
-            text="  Python is popular.  ",
+            "  article_001  ",
+            "  Python Report  ",
+            "  Python is popular.  ",
         )
-
         self.assertEqual(evidence["source_id"], "article_001")
         self.assertEqual(evidence["source_name"], "Python Report")
         self.assertEqual(evidence["text"], "Python is popular.")
@@ -121,26 +115,99 @@ class TestVerifyClaim(unittest.TestCase):
     def test_evidence_record_rejects_blank_source_id(self):
         with self.assertRaises(ValueError):
             create_evidence_record(
-                source_id=" ",
-                source_name="Python Report",
-                text="Python is popular.",
+                " ",
+                "Python Report",
+                "Python is popular.",
             )
 
     def test_evidence_record_rejects_blank_source_name(self):
         with self.assertRaises(ValueError):
             create_evidence_record(
-                source_id="article_001",
-                source_name=" ",
-                text="Python is popular.",
+                "article_001",
+                " ",
+                "Python is popular.",
             )
 
     def test_evidence_record_rejects_blank_text(self):
         with self.assertRaises(ValueError):
             create_evidence_record(
-                source_id="article_001",
-                source_name="Python Report",
-                text=" ",
+                "article_001",
+                "Python Report",
+                " ",
             )
+
+    def test_multiple_sources_all_support_claim(self):
+        sources = [
+            create_evidence_record(
+                "source_001",
+                "Source One",
+                "Python is popular.",
+            ),
+            create_evidence_record(
+                "source_002",
+                "Source Two",
+                "Python is popular.",
+            ),
+        ]
+
+        result = verify_claim_against_sources(
+            "Python is popular.",
+            sources,
+        )
+
+        self.assertEqual(result["status"], "SUPPORTED")
+        self.assertEqual(len(result["source_results"]), 2)
+
+    def test_multiple_sources_with_conflicting_evidence(self):
+        sources = [
+            create_evidence_record(
+                "source_001",
+                "Source One",
+                "Python is popular.",
+            ),
+            create_evidence_record(
+                "source_002",
+                "Source Two",
+                "Python is not popular.",
+            ),
+        ]
+
+        result = verify_claim_against_sources(
+            "Python is popular.",
+            sources,
+        )
+
+        self.assertEqual(result["status"], "UNVERIFIABLE")
+        self.assertEqual(len(result["source_results"]), 2)
+
+    def test_multiple_sources_with_no_support_are_unverifiable(self):
+        sources = [
+            create_evidence_record(
+                "source_001",
+                "Source One",
+                "The sky is blue.",
+            ),
+            create_evidence_record(
+                "source_002",
+                "Source Two",
+                "Water is wet.",
+            ),
+        ]
+
+        result = verify_claim_against_sources(
+            "Python is popular.",
+            sources,
+        )
+
+        self.assertEqual(result["status"], "UNVERIFIABLE")
+
+    def test_multiple_sources_empty_list_is_unverifiable(self):
+        result = verify_claim_against_sources(
+            "Python is popular.",
+            [],
+        )
+
+        self.assertEqual(result["status"], "UNVERIFIABLE")
 
 
 if __name__ == "__main__":
