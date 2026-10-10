@@ -53,6 +53,29 @@ class TestVerifyClaim(unittest.TestCase):
         )
 
         self.assertEqual(result["status"], "SUPPORTED")
+    def test_claim_inside_longer_sentence_is_not_automatically_supported(self):
+        result = verify_claim(
+            "Python is popular.",
+            "Python is popular in some regions, but usage varies.",
+        )
+
+        self.assertEqual(result["status"], "UNVERIFIABLE")
+
+    def test_contradiction_inside_mixed_evidence_is_unverifiable(self):
+        result = verify_claim(
+            "Python is popular.",
+            "Python is not popular in this example, but it is popular overall.",
+        )
+
+        self.assertEqual(result["status"], "UNVERIFIABLE")
+
+    def test_punctuation_difference_does_not_break_direct_match(self):
+        result = verify_claim(
+            "Python is popular!",
+            "Python is popular.",
+        )
+
+        self.assertEqual(result["status"], "SUPPORTED")
 
 
 if __name__ == "__main__":
