@@ -7,22 +7,24 @@ from pypdf import PdfReader
 
 def extract_text_from_pdf(pdf_file) -> dict:
     """
-    Extract text from a PDF file.
+    Extract and normalize text from a PDF.
 
     Accepts a file path, bytes, or a file-like object.
-
     Returns the extracted text and basic document information.
     """
 
     try:
         if isinstance(pdf_file, (str, Path)):
             reader = PdfReader(str(pdf_file))
+
         elif isinstance(pdf_file, bytes):
             reader = PdfReader(BytesIO(pdf_file))
+
         elif hasattr(pdf_file, "read"):
             if hasattr(pdf_file, "seek"):
                 pdf_file.seek(0)
             reader = PdfReader(pdf_file)
+
         else:
             raise ValueError(
                 "Provide a PDF path, bytes, or file-like object."
@@ -36,15 +38,20 @@ def extract_text_from_pdf(pdf_file) -> dict:
         pages_text = []
 
         for page_number, page in enumerate(reader.pages, start=1):
-            text = page.extract_text() or ""
+            raw_text = page.extract_text() or ""
+
+            # Collapse PDF line breaks and repeated spaces.
+            clean_text = " ".join(raw_text.split())
 
             pages_text.append({
                 "page_number": page_number,
-                "text": text.strip(),
+                "text": clean_text,
             })
 
+        # Do not add page labels to the evidence text.
+        # This helps exact sentence matching work with PDF content.
         full_text = "\n\n".join(
-            f"[Page {page['page_number']}]\n{page['text']}"
+            page["text"]
             for page in pages_text
             if page["text"]
         )
@@ -58,6 +65,7 @@ def extract_text_from_pdf(pdf_file) -> dict:
 
     except ValueError:
         raise
+
     except Exception as error:
         raise ValueError(
             f"Could not read PDF: {error}"
