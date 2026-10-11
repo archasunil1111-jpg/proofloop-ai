@@ -30,7 +30,8 @@ st.caption(
     "Prototype limitation: this version checks the text you provide "
     "or extract from PDFs. It does not independently verify source "
     "authenticity or establish whether a claim is factually true. "
-    "Scanned PDFs may require OCR, which is not included yet."
+    "Scanned PDFs can use OCR when Tesseract is installed. "
+    "OCR may misread text, so review extracted evidence carefully."
 )
 
 st.header("1. Enter your claim")
@@ -109,9 +110,10 @@ for i in range(int(source_count)):
                             )
                 else:
                     st.warning(
-                        "No selectable text was found in this PDF. "
-                        "It may be scanned or image-based. OCR is "
-                        "not supported yet."
+                        "No text could be extracted from this PDF. "
+                        "It may be blank, scanned, or image-based. "
+                        "Check that Tesseract OCR is installed and "
+                        "that the PDF contains readable text."
                     )
 
             except ValueError as error:
